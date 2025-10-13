@@ -7,7 +7,7 @@ on:
   workflow_dispatch:  # 允许手动触发
 
 env:
-  TELEGRAM_CHANNEL: 'cloudflareorg'
+  TELEGRAM_CHANNEL: 'TELEGRAM_CHANNEL'
 
 jobs:
   extract-ips:
