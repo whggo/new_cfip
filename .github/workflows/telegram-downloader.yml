@@ -2,9 +2,8 @@ name: Telegram CSV Downloader
 
 on:
   schedule:
-    # 每天北京时间11点运行 (UTC+8)
-    - cron: '0 3 * * *'
-  workflow_dispatch:  # 允许手动触发
+    - cron: '0 3 * * *'  # 每天UTC 3点 (北京时间11点)
+  workflow_dispatch:
     inputs:
       debug:
         description: 'Enable debug logging'
@@ -36,12 +35,20 @@ jobs:
         TELEGRAM_PHONE: ${{ secrets.TELEGRAM_PHONE }}
         TELEGRAM_CHANNEL: ${{ secrets.TELEGRAM_CHANNEL }}
       run: |
-        python telegram_downloader.py
+        # 检查session文件是否存在
+        if [ -f "telegram_session.session" ]; then
+          echo "找到session文件，开始运行..."
+          python telegram_downloader.py
+        else
+          echo "未找到session文件，请在本地运行setup_telegram.py完成首次登录"
+          exit 1
+        fi
         
     - name: Commit and push if changes
+      if: success()
       run: |
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
         git add ip.txt telegram_downloader.log
-        git diff --staged --quiet || git commit -m "Auto-update IP list - $(date)"
+        git diff --staged --quiet || git commit -m "Auto-update IP list - $(date +'%Y-%m-%d %H:%M')"
         git push
