@@ -14,14 +14,11 @@ CHANNEL_USERNAME = os.getenv('TELEGRAM_CHANNEL', 'cloudflareorg')
 DOWNLOAD_FOLDER = 'telegram_downloads'
 IP_FILE = 'ip.txt'
 
-# 设置日志
+# 设置日志 - 只输出到控制台，不保存文件
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(sys.stdout),
-        logging.FileHandler('telegram_downloader.log')
-    ]
+    handlers=[logging.StreamHandler(sys.stdout)]
 )
 logger = logging.getLogger(__name__)
 
