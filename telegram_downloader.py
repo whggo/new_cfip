@@ -2,15 +2,14 @@ import os
 import re
 import asyncio
 from telethon import TelegramClient
-from telethon.tl.types import Document, PhotoSize
 import logging
 import csv
 import sys
 
 # 配置信息 - 从环境变量获取
-API_ID = os.getenv('TELEGRAM_API_ID', '28485590')
-API_HASH = os.getenv('TELEGRAM_API_HASH', '330f1c88336bb732c2b541ed6f55aea8')
-PHONE_NUMBER = os.getenv('TELEGRAM_PHONE', '+8613339999091')
+API_ID = os.getenv('TELEGRAM_API_ID')
+API_HASH = os.getenv('TELEGRAM_API_HASH')
+PHONE_NUMBER = os.getenv('TELEGRAM_PHONE')
 CHANNEL_USERNAME = os.getenv('TELEGRAM_CHANNEL', 'cloudflareorg')
 DOWNLOAD_FOLDER = 'telegram_downloads'
 IP_FILE = 'ip.txt'
@@ -43,26 +42,6 @@ class TelegramDownloader:
         except Exception as e:
             logger.error(f"启动失败: {e}")
             return False
-    
-    async def send_code_request(self):
-        """请求发送验证码"""
-        try:
-            await self.client.send_code_request(self.phone_number)
-            logger.info("验证码已发送")
-            return True
-        except Exception as e:
-            logger.error(f"发送验证码失败: {e}")
-            return False
-    
-    async def sign_in(self, code):
-        """使用验证码登录"""
-        try:
-            await self.client.sign_in(self.phone_number, code)
-            logger.info("登录成功")
-            return True
-        except Exception as e:
-            logger.error(f"登录失败: {e}")
-            return False
         
     async def download_latest_csv(self, channel_username, download_folder):
         """下载频道中最新的一.csv文件"""
@@ -75,7 +54,7 @@ class TelegramDownloader:
             logger.info(f"成功连接到频道: {channel.title}")
         except Exception as e:
             logger.error(f"连接频道失败: {e}")
-            return
+            return None
         
         # 查找最新的.csv文件
         logger.info("正在查找最新的.csv文件...")
@@ -247,16 +226,23 @@ class TelegramDownloader:
         await self.client.disconnect()
 
 async def main():
+    # 检查必要的环境变量
+    if not all([API_ID, API_HASH, PHONE_NUMBER]):
+        logger.error("缺少必要的环境变量: TELEGRAM_API_ID, TELEGRAM_API_HASH, TELEGRAM_PHONE")
+        print("## 错误: 缺少必要的环境变量")
+        return
+    
     # 初始化下载器
     downloader = TelegramDownloader(API_ID, API_HASH, PHONE_NUMBER)
     
     try:
         # 启动客户端
+        logger.info("正在启动Telegram客户端...")
         success = await downloader.start()
         
         if not success:
-            logger.error("无法启动Telegram客户端，可能需要验证码")
-            print("## 错误: 需要验证码，请在本地运行一次以完成登录")
+            logger.error("无法启动Telegram客户端，session可能已过期")
+            print("## 错误: 无法启动Telegram客户端，请在本地重新运行setup_telegram.py")
             return
         
         # 下载最新的CSV文件
@@ -279,6 +265,12 @@ async def main():
                 print(f"## 提取结果")
                 print(f"- 成功提取 {len(ip_list)} 个443端口IP地址")
                 print(f"- 文件已保存至: {IP_FILE}")
+                
+                # 显示前几个IP作为示例
+                if len(ip_list) > 5:
+                    print(f"- 示例IP: {', '.join(ip_list[:5])}...")
+                else:
+                    print(f"- IP列表: {', '.join(ip_list)}")
             else:
                 logger.info("未找到任何443端口的IP地址")
                 print("## 提取结果: 未找到任何443端口的IP地址")
