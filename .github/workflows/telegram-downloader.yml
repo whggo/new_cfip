@@ -5,11 +5,6 @@ on:
     # 每天北京时间11点运行 (UTC+8 = UTC 3点)
     - cron: '0 3 * * *'
   workflow_dispatch:  # 允许手动触发
-    inputs:
-      force_run:
-        description: '强制运行（即使session过期）'
-        required: false
-        default: false
 
 env:
   TELEGRAM_CHANNEL: 'cloudflareorg'
@@ -18,7 +13,7 @@ jobs:
   extract-ips:
     runs-on: ubuntu-latest
     permissions:
-      contents: write  # 添加写入权限
+      contents: write
     
     steps:
     - name: Checkout repository
@@ -45,21 +40,19 @@ jobs:
         echo "开始运行Telegram IP提取器..."
         python telegram_downloader.py
         
-    - name: Upload IP file as artifact
+    - name: Upload IP file as artifact (可选)
       uses: actions/upload-artifact@v4
       with:
-        name: ip-list
-        path: |
-          ip.txt
-          telegram_downloader.log
+        name: ip-files
+        path: ip.txt
         retention-days: 7
         
-    - name: Commit and push IP changes
+    - name: Commit and push only IP file
       if: success()
       run: |
-        # 检查是否有文件变化
-        if git diff --quiet && git diff --staged --quiet; then
-          echo "没有发现文件变化，跳过提交"
+        # 检查ip.txt是否有变化
+        if git diff --quiet ip.txt 2>/dev/null; then
+          echo "ip.txt 没有变化，跳过提交"
           exit 0
         fi
         
@@ -67,9 +60,18 @@ jobs:
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
         
-        # 添加并提交文件
-        git add ip.txt telegram_downloader.log
+        # 只添加ip.txt文件
+        git add ip.txt
         git commit -m "🤖 Auto-update IP list - $(date +'%Y-%m-%d %H:%M')"
         
         # 推送到仓库
         git push
+        
+    - name: Clean up log file
+      if: always()
+      run: |
+        # 删除日志文件，不保存到仓库
+        if [ -f "telegram_downloader.log" ]; then
+          rm -f telegram_downloader.log
+          echo "已清理日志文件"
+        fi
