@@ -1,23 +1,29 @@
-name: Telegram CSV Downloader
+name: Telegram IP Extractor
 
 on:
   schedule:
-    - cron: '0 3 * * *'  # 每天UTC 3点 (北京时间11点)
-  workflow_dispatch:
+    # 每天北京时间11点运行 (UTC+8 = UTC 3点)
+    - cron: '0 3 * * *'
+  workflow_dispatch:  # 允许手动触发
     inputs:
-      debug:
-        description: 'Enable debug logging'
+      force_run:
+        description: '强制运行（即使session过期）'
         required: false
         default: false
 
+env:
+  TELEGRAM_CHANNEL: 'cloudflareorg'
+
 jobs:
-  download-and-process:
+  extract-ips:
     runs-on: ubuntu-latest
     
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
-      
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
@@ -26,29 +32,35 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install telethon
+        pip install -r requirements.txt
         
-    - name: Run Telegram Downloader
+    - name: Run Telegram IP Extractor
       env:
         TELEGRAM_API_ID: ${{ secrets.TELEGRAM_API_ID }}
         TELEGRAM_API_HASH: ${{ secrets.TELEGRAM_API_HASH }}
         TELEGRAM_PHONE: ${{ secrets.TELEGRAM_PHONE }}
-        TELEGRAM_CHANNEL: ${{ secrets.TELEGRAM_CHANNEL }}
       run: |
-        # 检查session文件是否存在
-        if [ -f "telegram_session.session" ]; then
-          echo "找到session文件，开始运行..."
-          python telegram_downloader.py
-        else
-          echo "未找到session文件，请在本地运行setup_telegram.py完成首次登录"
-          exit 1
-        fi
+        echo "开始运行Telegram IP提取器..."
+        python telegram_downloader.py
         
-    - name: Commit and push if changes
-      if: success()
+    - name: Upload IP file as artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: ip-list
+        path: |
+          ip.txt
+          telegram_downloader.log
+        retention-days: 7
+        
+    - name: Commit and push IP changes
       run: |
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
         git add ip.txt telegram_downloader.log
-        git diff --staged --quiet || git commit -m "Auto-update IP list - $(date +'%Y-%m-%d %H:%M')"
-        git push
+        if git diff --staged --quiet; then
+          echo "没有发现文件变化"
+        else
+          git commit -m "🤖 Auto-update IP list - $(date +'%Y-%m-%d %H:%M')"
+          git push
+          echo "已提交并推送更新"
+        fi
