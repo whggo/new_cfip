@@ -1,27 +1,12 @@
-1. 依赖文件 (requirements.txt)
-txt
-telethon==1.28.5
-2. 使用说明
-设置GitHub Secrets
-在GitHub仓库的 Settings → Secrets and variables → Actions 中添加以下secrets：
+# Telegram IP 提取器
 
-TELEGRAM_API_ID: 你的Telegram API ID
+自动从Telegram频道下载CSV文件并提取443端口IP地址。
 
-TELEGRAM_API_HASH: 你的Telegram API Hash
+## 设置步骤
 
-TELEGRAM_PHONE: 你的手机号
+### 1. 本地环境设置
 
-TELEGRAM_CHANNEL: 频道用户名（可选，默认为cloudflareorg）
-
-文件结构
-text
-你的仓库/
-├── .github/
-│   └── workflows/
-│       └── telegram-downloader.yml
-├── telegram_downloader.py
-├── requirements.txt
-├── ip.txt (自动生成)
-└── telegram_downloader.log (自动生成)
-主要修改内容
-环境变量支持: 从硬编码改为从环境变量读取配置
+1. 克隆仓库到本地
+2. 安装依赖：
+   ```bash
+   pip install -r requirements.txt
