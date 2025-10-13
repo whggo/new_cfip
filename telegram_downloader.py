@@ -28,13 +28,41 @@ logger = logging.getLogger(__name__)
 
 class TelegramDownloader:
     def __init__(self, api_id, api_hash, phone_number):
-        self.client = TelegramClient('session_name', api_id, api_hash)
+        # 使用固定的session文件
+        self.session_file = 'telegram_session'
+        self.client = TelegramClient(self.session_file, api_id, api_hash)
         self.phone_number = phone_number
         
     async def start(self):
-        """启动客户端"""
-        await self.client.start(phone=self.phone_number)
-        logger.info("客户端启动成功")
+        """启动客户端 - 非交互式版本"""
+        try:
+            # 尝试直接启动，如果session有效则无需验证
+            await self.client.start(phone=self.phone_number)
+            logger.info("客户端启动成功")
+            return True
+        except Exception as e:
+            logger.error(f"启动失败: {e}")
+            return False
+    
+    async def send_code_request(self):
+        """请求发送验证码"""
+        try:
+            await self.client.send_code_request(self.phone_number)
+            logger.info("验证码已发送")
+            return True
+        except Exception as e:
+            logger.error(f"发送验证码失败: {e}")
+            return False
+    
+    async def sign_in(self, code):
+        """使用验证码登录"""
+        try:
+            await self.client.sign_in(self.phone_number, code)
+            logger.info("登录成功")
+            return True
+        except Exception as e:
+            logger.error(f"登录失败: {e}")
+            return False
         
     async def download_latest_csv(self, channel_username, download_folder):
         """下载频道中最新的一.csv文件"""
@@ -52,7 +80,7 @@ class TelegramDownloader:
         # 查找最新的.csv文件
         logger.info("正在查找最新的.csv文件...")
         
-        async for message in self.client.iter_messages(channel, limit=50):  # 限制消息数量提高效率
+        async for message in self.client.iter_messages(channel, limit=50):
             if message.media and hasattr(message.media, 'document'):
                 document = message.media.document
                 filename = None
@@ -78,7 +106,7 @@ class TelegramDownloader:
                     try:
                         await self.client.download_media(message, file=file_path)
                         logger.info(f"下载成功: {filename}")
-                        return file_path  # 下载完成后直接返回
+                        return file_path
                     except Exception as e:
                         logger.error(f"下载失败: {e}")
                         return None
@@ -92,15 +120,13 @@ class TelegramDownloader:
             logger.error(f"CSV文件不存在: {csv_file_path}")
             return []
         
-        ip_addresses = set()  # 使用集合避免重复IP
+        ip_addresses = set()
         
         try:
             with open(csv_file_path, 'r', encoding='utf-8', errors='ignore') as file:
-                # 尝试不同的分隔符
                 sample = file.read(1024)
                 file.seek(0)
                 
-                # 检测分隔符
                 delimiter = ','
                 if ';' in sample and ',' not in sample:
                     delimiter = ';'
@@ -111,60 +137,46 @@ class TelegramDownloader:
                 headers = None
                 
                 for row_num, row in enumerate(reader, 1):
-                    # 跳过空行
                     if not row:
                         continue
                     
-                    # 识别表头
                     if row_num == 1:
                         headers = [header.strip().lower() for header in row]
                         logger.info(f"检测到表头: {headers}")
                         continue
                     
-                    # 查找端口列的索引
                     port_column_index = None
                     for i, header in enumerate(headers):
                         if header in ['port', '端口', 'port_number', '端口号']:
                             port_column_index = i
                             break
                     
-                    # 如果没有找到明确的端口列，假设最后一列是端口
                     if port_column_index is None:
                         port_column_index = len(row) - 1
                         logger.info(f"未找到端口列，假设最后一列为端口列")
                     
-                    # 检查端口列的值是否为443
                     if port_column_index < len(row):
                         port_value = str(row[port_column_index]).strip()
                         
-                        # 精确匹配443端口
                         if port_value == '443':
-                            # 查找IP地址列
                             ip_column_index = None
                             for i, header in enumerate(headers):
                                 if header in ['ip', 'ip地址', 'ip_address', 'address', '地址']:
                                     ip_column_index = i
                                     break
                             
-                            # 如果没有找到明确的IP列，假设第一列是IP
                             if ip_column_index is None:
                                 ip_column_index = 0
                                 logger.info(f"未找到IP列，假设第一列为IP列")
                             
                             if ip_column_index < len(row):
                                 ip_value = str(row[ip_column_index]).strip()
-                                
-                                # 从IP值中提取纯IP地址（去除可能的附加信息）
                                 ip_match = re.search(r'\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b', ip_value)
                                 if ip_match:
                                     ip = ip_match.group()
                                     if self.is_valid_ip(ip):
                                         ip_addresses.add(ip)
                                         logger.debug(f"找到443端口IP地址: {ip} (行 {row_num})")
-                                    else:
-                                        logger.debug(f"无效IP地址: {ip} (行 {row_num})")
-                                else:
-                                    logger.debug(f"行 {row_num} 未找到有效IP格式: {ip_value}")
         
         except Exception as e:
             logger.error(f"读取CSV文件时出错: {e}")
@@ -182,7 +194,6 @@ class TelegramDownloader:
             with open(csv_file_path, 'r', encoding='utf-8', errors='ignore') as file:
                 content = file.read()
                 
-                # 方法1: 查找IP:443格式
                 ip_port_pattern1 = r'\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}:443\b'
                 matches1 = re.findall(ip_port_pattern1, content)
                 for match in matches1:
@@ -190,12 +201,9 @@ class TelegramDownloader:
                     if self.is_valid_ip(ip):
                         ip_addresses.add(ip)
                 
-                # 方法2: 查找包含443端口的行，然后提取IP
                 lines = content.split('\n')
                 for line_num, line in enumerate(lines, 1):
-                    # 查找包含443但不是8443、3443等其他端口的行
                     if re.search(r'\b443\b', line) and not re.search(r'\b(?:8443|3443|2443|1443)\b', line):
-                        # 从该行提取IP地址
                         ips_in_line = re.findall(r'\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b', line)
                         for ip in ips_in_line:
                             if self.is_valid_ip(ip):
@@ -244,7 +252,12 @@ async def main():
     
     try:
         # 启动客户端
-        await downloader.start()
+        success = await downloader.start()
+        
+        if not success:
+            logger.error("无法启动Telegram客户端，可能需要验证码")
+            print("## 错误: 需要验证码，请在本地运行一次以完成登录")
+            return
         
         # 下载最新的CSV文件
         file_path = await downloader.download_latest_csv(CHANNEL_USERNAME, DOWNLOAD_FOLDER)
@@ -256,17 +269,13 @@ async def main():
             logger.info("正在从CSV文件中提取443端口的IP地址...")
             ip_list = downloader.extract_443_ips_from_csv(file_path)
             
-            # 如果第一种方法没找到，尝试高级方法
             if not ip_list:
                 logger.info("标准CSV解析未找到IP，尝试高级解析...")
                 ip_list = downloader.extract_443_ips_advanced(file_path)
             
-            # 保存IP地址到文件
             if ip_list:
                 downloader.save_ips_to_file(ip_list, IP_FILE)
                 logger.info(f"成功提取 {len(ip_list)} 个443端口IP地址")
-                
-                # 在GitHub Actions中输出结果
                 print(f"## 提取结果")
                 print(f"- 成功提取 {len(ip_list)} 个443端口IP地址")
                 print(f"- 文件已保存至: {IP_FILE}")
@@ -281,10 +290,7 @@ async def main():
     except Exception as e:
         logger.error(f"发生错误: {e}")
         print(f"## 错误: {e}")
-        # 在GitHub Actions中标记为失败
-        sys.exit(1)
     finally:
-        # 关闭客户端
         await downloader.close()
 
 if __name__ == "__main__":
