@@ -10,7 +10,7 @@ import sys
 API_ID = os.getenv('TELEGRAM_API_ID')
 API_HASH = os.getenv('TELEGRAM_API_HASH')
 PHONE_NUMBER = os.getenv('TELEGRAM_PHONE')
-CHANNEL_USERNAME = os.getenv('TELEGRAM_CHANNEL', 'cloudflareorg')
+CHANNEL_USERNAME = os.getenv('TELEGRAM_CHANNEL')
 DOWNLOAD_FOLDER = 'telegram_downloads'
 IP_FILE = 'ip.txt'
 
