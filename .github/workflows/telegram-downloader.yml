@@ -47,20 +47,14 @@ jobs:
         path: ip.txt
         retention-days: 7
         
-    - name: Commit and push only IP file
+    - name: Commit and push IP file
       if: success()
       run: |
-        # 检查ip.txt是否有变化
-        if git diff --quiet ip.txt 2>/dev/null; then
-          echo "ip.txt 没有变化，跳过提交"
-          exit 0
-        fi
-        
         # 设置Git用户信息
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
         
-        # 只添加ip.txt文件
+        # 添加并提交ip.txt文件（无论是否有变化）
         git add ip.txt
         git commit -m "🤖 Auto-update IP list - $(date +'%Y-%m-%d %H:%M')"
         
