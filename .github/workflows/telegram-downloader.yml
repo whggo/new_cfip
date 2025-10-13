@@ -47,16 +47,22 @@ jobs:
         path: ip.txt
         retention-days: 7
         
-    - name: Commit and push changes
+    - name: Commit and push only IP file
       if: success()
       run: |
+        # 检查ip.txt是否有变化
+        if git diff --quiet ip.txt 2>/dev/null; then
+          echo "ip.txt 没有变化，跳过提交"
+          exit 0
+        fi
+        
         # 设置Git用户信息
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
         
-        # 添加所有更改的文件（包括ip.txt和telegram_session.session）
-        git add -A
-        git commit -m "🤖 Auto-update IP list and session - $(date +'%Y-%m-%d %H:%M')"
+        # 只添加ip.txt文件
+        git add ip.txt
+        git commit -m "🤖 Auto-update IP list - $(date +'%Y-%m-%d %H:%M')"
         
         # 推送到仓库
         git push
