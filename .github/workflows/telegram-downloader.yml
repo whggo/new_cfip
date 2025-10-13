@@ -1,0 +1,47 @@
+name: Telegram CSV Downloader
+
+on:
+  schedule:
+    # 每天北京时间11点运行 (UTC+8)
+    - cron: '0 3 * * *'
+  workflow_dispatch:  # 允许手动触发
+    inputs:
+      debug:
+        description: 'Enable debug logging'
+        required: false
+        default: false
+
+jobs:
+  download-and-process:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install telethon
+        
+    - name: Run Telegram Downloader
+      env:
+        TELEGRAM_API_ID: ${{ secrets.TELEGRAM_API_ID }}
+        TELEGRAM_API_HASH: ${{ secrets.TELEGRAM_API_HASH }}
+        TELEGRAM_PHONE: ${{ secrets.TELEGRAM_PHONE }}
+        TELEGRAM_CHANNEL: ${{ secrets.TELEGRAM_CHANNEL }}
+      run: |
+        python telegram_downloader.py
+        
+    - name: Commit and push if changes
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add ip.txt telegram_downloader.log
+        git diff --staged --quiet || git commit -m "Auto-update IP list - $(date)"
+        git push
