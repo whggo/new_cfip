@@ -5,8 +5,9 @@ from telethon import TelegramClient
 import logging
 import csv
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import pandas as pd
+import tempfile
 
 # 配置信息 - 从环境变量获取
 API_ID = os.getenv('TELEGRAM_API_ID')
@@ -28,8 +29,9 @@ logger = logging.getLogger(__name__)
 
 class TelegramDownloader:
     def __init__(self, api_id, api_hash, phone_number, channel_username):
-        # 使用固定的session文件
-        self.session_file = 'telegram_session'
+        # 使用临时目录存储session文件，避免Git提交问题
+        temp_dir = tempfile.gettempdir()
+        self.session_file = os.path.join(temp_dir, 'telegram_session')
         self.client = TelegramClient(self.session_file, api_id, api_hash)
         self.phone_number = phone_number
         self.channel_username = channel_username
@@ -65,10 +67,10 @@ class TelegramDownloader:
                 logger.error(f"第二次连接也失败: {e2}")
                 return []
         
-        # 计算今天的时间范围（考虑时区）
-        utc_now = datetime.utcnow()
-        today_start = datetime(utc_now.year, utc_now.month, utc_now.day, 0, 0, 0)
-        today_end = datetime(utc_now.year, utc_now.month, utc_now.day, 23, 59, 59)
+        # 计算今天的时间范围（使用正确的时区处理）
+        utc_now = datetime.now(timezone.utc)
+        today_start = datetime(utc_now.year, utc_now.month, utc_now.day, 0, 0, 0).replace(tzinfo=timezone.utc)
+        today_end = datetime(utc_now.year, utc_now.month, utc_now.day, 23, 59, 59).replace(tzinfo=timezone.utc)
         
         logger.info(f"正在查找今天 ({utc_now.date()}) UTC时间发布的CSV文件...")
         logger.info(f"时间范围: {today_start} 到 {today_end}")
@@ -92,7 +94,7 @@ class TelegramDownloader:
                     # 检查是否为.csv文件
                     if filename and filename.lower().endswith('.csv'):
                         # 检查消息日期（转换为UTC时间进行比较）
-                        message_date = message.date.replace(tzinfo=None)
+                        message_date = message.date
                         
                         # 放宽时间限制，获取最近3天的文件
                         three_days_ago = utc_now - timedelta(days=3)
@@ -108,9 +110,9 @@ class TelegramDownloader:
                                 downloaded_files.append(file_path)
                                 continue
                             
-                            # 下载文件
+                            # 下载文件（添加重试机制）
                             try:
-                                await self.client.download_media(message, file=file_path)
+                                await self.download_with_retry(message, file_path)
                                 logger.info(f"下载成功: {filename}")
                                 downloaded_files.append(file_path)
                             except Exception as e:
@@ -130,6 +132,19 @@ class TelegramDownloader:
         except Exception as e:
             logger.error(f"获取消息时出错: {e}")
             return []
+    
+    async def download_with_retry(self, message, file_path, max_retries=3):
+        """带重试机制的文件下载"""
+        for attempt in range(max_retries):
+            try:
+                await self.client.download_media(message, file=file_path)
+                return True
+            except Exception as e:
+                if attempt == max_retries - 1:
+                    raise e
+                wait_time = 2 ** attempt  # 指数退避
+                logger.warning(f"下载失败，{wait_time}秒后重试 (尝试 {attempt + 1}/{max_retries}): {e}")
+                await asyncio.sleep(wait_time)
     
     def merge_csv_files(self, csv_files, output_filename='merged.csv'):
         """合并多个CSV文件"""
@@ -486,18 +501,13 @@ class TelegramDownloader:
     
     def is_valid_ip(self, ip):
         """验证IP地址格式是否正确"""
-        parts = ip.split('.')
-        if len(parts) != 4:
+        try:
+            parts = ip.split('.')
+            if len(parts) != 4:
+                return False
+            return all(0 <= int(part) <= 255 for part in parts if part.isdigit())
+        except:
             return False
-        
-        for part in parts:
-            if not part.isdigit():
-                return False
-            num = int(part)
-            if num < 0 or num > 255:
-                return False
-        
-        return True
     
     def save_ips_to_file(self, ip_list, output_file):
         """将IP地址列表保存到文件"""
