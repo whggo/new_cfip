@@ -1,0 +1,11 @@
+IP地址,端口,TLS,数据中心,源IP位置,地区,城市,地区(中文),国家,城市(中文),国旗,网络延迟,下载速度
+171.103.223.30,10239,true,BKK,TH,Asia Pacific,Bangkok,亚洲,泰国,曼谷,🇹🇭,280 ms,3895 kB/s
+171.103.14.247,10034,true,BKK,TH,Asia Pacific,Bangkok,亚洲,泰国,曼谷,🇹🇭,427 ms,2647 kB/s
+171.103.14.55,10111,true,BKK,TH,Asia Pacific,Bangkok,亚洲,泰国,曼谷,🇹🇭,441 ms,2388 kB/s
+171.103.231.6,33399,true,BKK,TH,Asia Pacific,Bangkok,亚洲,泰国,曼谷,🇹🇭,383 ms,1642 kB/s
+171.103.222.142,18110,true,BKK,TH,Asia Pacific,Bangkok,亚洲,泰国,曼谷,🇹🇭,280 ms,1049 kB/s
+171.103.231.6,18082,true,BKK,TH,Asia Pacific,Bangkok,亚洲,泰国,曼谷,🇹🇭,397 ms,780 kB/s
+171.103.14.207,10071,true,BKK,TH,Asia Pacific,Bangkok,亚洲,泰国,曼谷,🇹🇭,413 ms,749 kB/s
+171.103.164.62,30921,true,SIN,TH,Asia Pacific,Singapore,亚洲,新加坡,新加坡,🇸🇬,423 ms,628 kB/s
+171.103.15.21,10255,true,BKK,TH,Asia Pacific,Bangkok,亚洲,泰国,曼谷,🇹🇭,382 ms,542 kB/s
+27.254.163.51,10327,true,BKK,TH,Asia Pacific,Bangkok,亚洲,泰国,曼谷,🇹🇭,141 ms,80 kB/s

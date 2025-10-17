@@ -1,0 +1,28 @@
+IP地址,端口,TLS,数据中心,源IP位置,地区,城市,地区(中文),国家,城市(中文),国旗,网络延迟,下载速度
+183.236.51.220,7003,true,TPE,TW,Asia Pacific,Taipei,亚洲,台湾,台北,🇹🇼,60 ms,11877 kB/s
+183.236.51.201,7001,true,TPE,TW,Asia Pacific,Taipei,亚洲,台湾,台北,🇹🇼,61 ms,10569 kB/s
+183.236.51.220,7005,true,TPE,TW,Asia Pacific,Taipei,亚洲,台湾,台北,🇹🇼,55 ms,10353 kB/s
+120.232.218.93,20201,true,KHH,TW,Asia Pacific,Kaohsiung City,亚洲,台湾,高雄市,🇹🇼,56 ms,9135 kB/s
+183.236.51.220,7001,true,TPE,TW,Asia Pacific,Taipei,亚洲,台湾,台北,🇹🇼,61 ms,9034 kB/s
+183.236.51.201,7002,true,TPE,TW,Asia Pacific,Taipei,亚洲,台湾,台北,🇹🇼,52 ms,8915 kB/s
+183.236.51.201,7003,true,TPE,TW,Asia Pacific,Taipei,亚洲,台湾,台北,🇹🇼,58 ms,5713 kB/s
+154.26.186.164,19071,true,TPE,TW,Asia Pacific,Taipei,亚洲,台湾,台北,🇹🇼,166 ms,5303 kB/s
+183.236.51.220,7002,true,TPE,TW,Asia Pacific,Taipei,亚洲,台湾,台北,🇹🇼,53 ms,5216 kB/s
+103.123.132.236,443,true,TPE,TW,Asia Pacific,Taipei,亚洲,台湾,台北,🇹🇼,269 ms,4917 kB/s
+122.116.43.253,995,true,TPE,TW,Asia Pacific,Taipei,亚洲,台湾,台北,🇹🇼,76 ms,4765 kB/s
+220.128.110.108,43,true,TPE,TW,Asia Pacific,Taipei,亚洲,台湾,台北,🇹🇼,84 ms,2949 kB/s
+183.236.51.201,7005,true,TPE,TW,Asia Pacific,Taipei,亚洲,台湾,台北,🇹🇼,58 ms,2435 kB/s
+125.227.162.252,12486,true,TPE,TW,Asia Pacific,Taipei,亚洲,台湾,台北,🇹🇼,78 ms,1560 kB/s
+123.253.111.240,443,true,TPE,TW,Asia Pacific,Taipei,亚洲,台湾,台北,🇹🇼,277 ms,1395 kB/s
+114.34.202.224,10004,true,TPE,TW,Asia Pacific,Taipei,亚洲,台湾,台北,🇹🇼,82 ms,1371 kB/s
+125.227.162.252,12485,true,TPE,TW,Asia Pacific,Taipei,亚洲,台湾,台北,🇹🇼,89 ms,783 kB/s
+39.159.27.210,8101,true,TPE,TW,Asia Pacific,Taipei,亚洲,台湾,台北,🇹🇼,51 ms,762 kB/s
+114.32.9.249,51443,true,TPE,TW,Asia Pacific,Taipei,亚洲,台湾,台北,🇹🇼,78 ms,188 kB/s
+114.32.9.249,16443,true,TPE,TW,Asia Pacific,Taipei,亚洲,台湾,台北,🇹🇼,80 ms,101 kB/s
+60.249.114.181,12461,true,TPE,TW,Asia Pacific,Taipei,亚洲,台湾,台北,🇹🇼,106 ms,88 kB/s
+45.207.159.194,8080,true,TPE,TW,Asia Pacific,Taipei,亚洲,台湾,台北,🇹🇼,265 ms,57 kB/s
+60.249.114.181,10244,true,KHH,TW,Asia Pacific,Kaohsiung City,亚洲,台湾,高雄市,🇹🇼,117 ms,12 kB/s
+61.220.128.226,43,true,TPE,TW,Asia Pacific,Taipei,亚洲,台湾,台北,🇹🇼,88 ms,0 kB/s
+60.249.114.181,16022,true,TPE,TW,Asia Pacific,Taipei,亚洲,台湾,台北,🇹🇼,117 ms,0 kB/s
+60.249.114.181,10217,true,TPE,TW,Asia Pacific,Taipei,亚洲,台湾,台北,🇹🇼,116 ms,0 kB/s
+183.236.51.220,7004,true,TPE,TW,Asia Pacific,Taipei,亚洲,台湾,台北,🇹🇼,62 ms,0 kB/s
