@@ -15,6 +15,7 @@ PHONE_NUMBER = os.getenv('TELEGRAM_PHONE')
 CHANNEL_USERNAME = os.getenv('TELEGRAM_CHANNEL')
 DOWNLOAD_FOLDER = 'telegram_downloads'
 IP_FILE = 'ip.txt'
+HK_IP_FILE = 'hkip.txt'  # 新增HK IP文件
 
 # 设置日志 - 只输出到控制台，不保存文件
 logging.basicConfig(
@@ -200,11 +201,13 @@ class TelegramDownloader:
         """从CSV文件中提取端口列明确为443的IP地址"""
         if not os.path.exists(csv_file_path):
             logger.error(f"CSV文件不存在: {csv_file_path}")
-            return []
+            return [], []  # 返回两个空列表：所有443 IP和HK 443 IP
         
         ip_addresses = set()
+        hk_ip_addresses = set()  # 新增：存储HK区域的IP
         rows_processed = 0
         rows_with_443 = 0
+        rows_with_hk_443 = 0
         
         try:
             with open(csv_file_path, 'r', encoding='utf-8', errors='ignore') as file:
@@ -249,53 +252,90 @@ class TelegramDownloader:
                         port_column_index = len(row) - 1  # 假设最后一列
                         logger.info(f"未找到明确的端口列，假设第{port_column_index + 1}列为端口列")
                     
+                    # 检查是否为443端口
+                    is_443_port = False
                     if port_column_index is not None and port_column_index < len(row):
                         port_value = str(row[port_column_index]).strip()
-                        
                         if port_value == '443':
+                            is_443_port = True
                             rows_with_443 += 1
-                            # 查找IP列
-                            ip_column_index = None
+                    
+                    if is_443_port:
+                        # 查找IP列
+                        ip_column_index = None
+                        for i, header in enumerate(headers):
+                            if header in ['ip', 'ip地址', 'ip_address', 'address', '地址', 'dstip', 'ipaddr']:
+                                ip_column_index = i
+                                break
+                        
+                        # 如果没找到IP列，尝试其他常见列名
+                        if ip_column_index is None:
                             for i, header in enumerate(headers):
-                                if header in ['ip', 'ip地址', 'ip_address', 'address', '地址', 'dstip', 'ipaddr']:
+                                if 'ip' in header:
                                     ip_column_index = i
                                     break
-                            
-                            # 如果没找到IP列，尝试其他常见列名
-                            if ip_column_index is None:
-                                for i, header in enumerate(headers):
-                                    if 'ip' in header:
-                                        ip_column_index = i
-                                        break
-                            
-                            if ip_column_index is None:
-                                ip_column_index = 0  # 假设第一列
-                                logger.info(f"未找到明确的IP列，假设第{ip_column_index + 1}列为IP列")
-                            
-                            if ip_column_index < len(row):
-                                ip_value = str(row[ip_column_index]).strip()
-                                # 使用更严格的IP匹配
-                                ip_match = re.search(r'\b(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b', ip_value)
-                                if ip_match:
-                                    ip = ip_match.group()
-                                    if self.is_valid_ip(ip):
-                                        ip_addresses.add(ip)
-                                        if len(ip_addresses) <= 5:  # 只显示前几个
-                                            logger.debug(f"找到443端口IP地址: {ip} (行 {row_num})")
+                        
+                        if ip_column_index is None:
+                            ip_column_index = 0  # 假设第一列
+                            logger.info(f"未找到明确的IP列，假设第{ip_column_index + 1}列为IP列")
+                        
+                        # 查找区域列
+                        region_column_index = None
+                        for i, header in enumerate(headers):
+                            if header in ['region', '区域', 'country', '国家', 'location', '位置', 'geo', '地区']:
+                                region_column_index = i
+                                break
+                        
+                        # 如果没找到区域列，尝试其他常见列名
+                        if region_column_index is None:
+                            for i, header in enumerate(headers):
+                                if any(keyword in header for keyword in ['region', 'country', 'location', 'geo', '区域', '国家', '位置', '地区']):
+                                    region_column_index = i
+                                    break
+                        
+                        if ip_column_index < len(row):
+                            ip_value = str(row[ip_column_index]).strip()
+                            # 使用更严格的IP匹配
+                            ip_match = re.search(r'\b(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b', ip_value)
+                            if ip_match:
+                                ip = ip_match.group()
+                                if self.is_valid_ip(ip):
+                                    ip_addresses.add(ip)
+                                    if len(ip_addresses) <= 5:  # 只显示前几个
+                                        logger.debug(f"找到443端口IP地址: {ip} (行 {row_num})")
+                                    
+                                    # 检查是否为HK区域
+                                    is_hk = False
+                                    if region_column_index is not None and region_column_index < len(row):
+                                        region_value = str(row[region_column_index]).strip().upper()
+                                        # 匹配HK相关的区域标识
+                                        if region_value in ['HK', 'HONG KONG', '香港', 'HONGKONG', 'CN-HK', 'HK-']:
+                                            is_hk = True
+                                            rows_with_hk_443 += 1
+                                            hk_ip_addresses.add(ip)
+                                            logger.debug(f"找到HK区域443端口IP地址: {ip} (行 {row_num})")
+                                    
+                                    # 如果没有找到区域列，或者区域列没有明确标识，使用备用方法判断
+                                    if not is_hk and (region_column_index is None or region_column_index >= len(row)):
+                                        # 这里可以添加基于IP的geo定位，但需要额外库
+                                        # 暂时只记录非HK的IP
+                                        pass
         
-            logger.info(f"处理了 {rows_processed} 行数据，找到 {rows_with_443} 行443端口，提取到 {len(ip_addresses)} 个唯一IP")
+            logger.info(f"处理了 {rows_processed} 行数据，找到 {rows_with_443} 行443端口，其中 {rows_with_hk_443} 行是HK区域")
+            logger.info(f"提取到 {len(ip_addresses)} 个唯一443端口IP，其中 {len(hk_ip_addresses)} 个是HK区域IP")
         
         except Exception as e:
             logger.error(f"读取CSV文件时出错: {e}")
         
-        return list(ip_addresses)
+        return list(ip_addresses), list(hk_ip_addresses)
     
     def extract_443_ips_advanced(self, csv_file_path):
         """高级方法提取443端口IP（备用方法）"""
         if not os.path.exists(csv_file_path):
-            return []
+            return [], []
         
         ip_addresses = set()
+        hk_ip_addresses = set()
         
         try:
             with open(csv_file_path, 'r', encoding='utf-8', errors='ignore') as file:
@@ -321,11 +361,18 @@ class TelegramDownloader:
                                 if len(ip_addresses) <= 5:
                                     logger.debug(f"从行 {line_num} 找到443端口IP: {ip}")
                         
+                        # 检查是否包含HK标识
+                        if re.search(r'\b(HK|Hong Kong|香港|HongKong)\b', line, re.IGNORECASE):
+                            for ip in ips_in_line:
+                                if self.is_valid_ip(ip):
+                                    hk_ip_addresses.add(ip)
+                                    logger.debug(f"从行 {line_num} 找到HK区域443端口IP: {ip}")
+                        
         except Exception as e:
             logger.error(f"高级解析时出错: {e}")
         
-        logger.info(f"高级解析找到 {len(ip_addresses)} 个IP地址")
-        return list(ip_addresses)
+        logger.info(f"高级解析找到 {len(ip_addresses)} 个IP地址，其中 {len(hk_ip_addresses)} 个是HK区域IP")
+        return list(ip_addresses), list(hk_ip_addresses)
     
     def is_valid_ip(self, ip):
         """验证IP地址格式是否正确"""
@@ -403,29 +450,39 @@ async def main():
                 
                 # 提取443端口的IP地址
                 logger.info("正在从CSV文件中提取443端口的IP地址...")
-                ip_list = downloader.extract_443_ips_from_csv(file_to_process)
+                ip_list, hk_ip_list = downloader.extract_443_ips_from_csv(file_to_process)
                 
                 if not ip_list:
                     logger.info("标准CSV解析未找到IP，尝试高级解析...")
-                    ip_list = downloader.extract_443_ips_advanced(file_to_process)
+                    ip_list, hk_ip_list = downloader.extract_443_ips_advanced(file_to_process)
                 
+                # 保存所有443端口IP
                 if ip_list:
                     downloader.save_ips_to_file(ip_list, IP_FILE)
                     logger.info(f"成功提取 {len(ip_list)} 个443端口IP地址")
+                else:
+                    logger.info("未找到任何443端口的IP地址")
+                
+                # 保存HK区域443端口IP
+                if hk_ip_list:
+                    downloader.save_ips_to_file(hk_ip_list, HK_IP_FILE)
+                    logger.info(f"成功提取 {len(hk_ip_list)} 个HK区域443端口IP地址")
                     print(f"## 提取结果")
                     print(f"- 目标频道: {CHANNEL_USERNAME}")
                     print(f"- 处理文件数: {len(csv_files)}")
-                    print(f"- 成功提取 {len(ip_list)} 个443端口IP地址")
-                    print(f"- 文件已保存至: {IP_FILE}")
+                    print(f"- 总443端口IP: {len(ip_list) if ip_list else 0} 个")
+                    print(f"- HK区域443端口IP: {len(hk_ip_list)} 个")
+                    print(f"- HK IP文件已保存至: {HK_IP_FILE}")
                     
-                    # 显示前几个IP作为示例
-                    if len(ip_list) > 5:
-                        print(f"- 示例IP: {', '.join(ip_list[:5])}...")
+                    # 显示前几个HK IP作为示例
+                    if len(hk_ip_list) > 5:
+                        print(f"- 示例HK IP: {', '.join(hk_ip_list[:5])}...")
                     else:
-                        print(f"- IP列表: {', '.join(ip_list)}")
+                        print(f"- HK IP列表: {', '.join(hk_ip_list)}")
                 else:
-                    logger.info("未找到任何443端口的IP地址")
-                    print("## 提取结果: 未找到任何443端口的IP地址")
+                    logger.info("未找到任何HK区域443端口的IP地址")
+                    print("## 提取结果: 未找到任何HK区域443端口的IP地址")
+                
             else:
                 logger.error("文件处理失败")
                 print("## 错误: 文件处理失败")
