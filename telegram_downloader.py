@@ -50,7 +50,7 @@ class TelegramDownloader:
         
         # 获取频道实体
         try:
-            logger.info(f"正在连接频道: {self.channel_USERNAME}")
+            logger.info(f"正在连接频道: {self.channel_username}")  # 修正：改为小写
             channel = await self.client.get_entity(self.channel_username)
             logger.info(f"成功连接到频道: {channel.title}")
         except ValueError as e:
@@ -94,10 +94,11 @@ class TelegramDownloader:
                         
                         file_path = os.path.join(download_folder, filename)
                         
-                        # 如果文件已存在，先删除
+                        # 如果文件已存在，跳过下载（不删除）
                         if os.path.exists(file_path):
-                            logger.info(f"文件已存在，删除旧文件: {filename}")
-                            os.remove(file_path)
+                            logger.info(f"文件已存在，跳过下载: {filename}")
+                            downloaded_files.append(file_path)
+                            continue
                         
                         # 下载文件
                         try:
@@ -108,7 +109,7 @@ class TelegramDownloader:
                             logger.error(f"下载失败: {e}")
             
             if downloaded_files:
-                logger.info(f"成功下载 {len(downloaded_files)} 个今天发布的CSV文件")
+                logger.info(f"成功下载/找到 {len(downloaded_files)} 个今天发布的CSV文件")
             else:
                 logger.info("未找到今天发布的任何CSV文件")
                 
@@ -396,7 +397,7 @@ async def main():
         csv_files = await downloader.download_todays_csv_files(DOWNLOAD_FOLDER)
         
         if csv_files:
-            logger.info(f"成功下载 {len(csv_files)} 个今天发布的CSV文件")
+            logger.info(f"成功下载/找到 {len(csv_files)} 个今天发布的CSV文件")
             
             # 合并CSV文件
             merged_file = downloader.merge_csv_files(csv_files)
