@@ -1,0 +1,10 @@
+# Telegram session files
+telegram_session.session
+*.session
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Environment variables
+.env
