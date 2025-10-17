@@ -51,6 +51,7 @@ jobs:
         path: |
           ip.txt
           hkip.txt
+          sgip.txt
           telegram_downloads/
         retention-days: 7
         
@@ -63,9 +64,12 @@ jobs:
         cat ip.txt || echo "ip.txt文件不存在"
         echo "=== HK区域443端口IP文件内容 ==="
         cat hkip.txt || echo "hkip.txt文件不存在"
+        echo "=== SG区域443端口IP文件内容 ==="
+        cat sgip.txt || echo "sgip.txt文件不存在"
         echo "=== 文件统计 ==="
         echo "所有443端口IP数量: $(wc -l < ip.txt 2>/dev/null || echo 0)"
         echo "HK区域443端口IP数量: $(wc -l < hkip.txt 2>/dev/null || echo 0)"
+        echo "SG区域443端口IP数量: $(wc -l < sgip.txt 2>/dev/null || echo 0)"
         
     - name: Always commit and push files
       if: success()
@@ -98,6 +102,17 @@ jobs:
           files_committed="$files_committed HK区域443端口IP($hk_ip_count个)"
         else
           echo "警告: hkip.txt 文件不存在"
+        fi
+        
+        # 检查并添加SG区域443端口IP文件
+        if [ -f "sgip.txt" ]; then
+          echo "添加 sgip.txt 文件"
+          git add sgip.txt
+          files_to_add="$files_to_add sgip.txt"
+          sg_ip_count=$(wc -l < sgip.txt)
+          files_committed="$files_committed SG区域443端口IP($sg_ip_count个)"
+        else
+          echo "警告: sgip.txt 文件不存在"
         fi
         
         # 检查并添加CSV文件
@@ -135,6 +150,9 @@ jobs:
           fi
           if [ -f "hkip.txt" ]; then
             echo "HK区域443端口IP数量: $(wc -l < hkip.txt)"
+          fi
+          if [ -f "sgip.txt" ]; then
+            echo "SG区域443端口IP数量: $(wc -l < sgip.txt)"
           fi
         else
           echo "❌ 没有找到要提交的文件"
@@ -184,6 +202,24 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
         else
           echo "### HK区域443端口IP" >> $GITHUB_STEP_SUMMARY
+          echo "- ❌ 文件不存在" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        if [ -f "sgip.txt" ]; then
+          SG_IP_COUNT=$(wc -l < sgip.txt)
+          echo "### SG区域443端口IP" >> $GITHUB_STEP_SUMMARY
+          echo "- **文件:** sgip.txt" >> $GITHUB_STEP_SUMMARY
+          echo "- **数量:** $SG_IP_COUNT 个IP" >> $GITHUB_STEP_SUMMARY
+          if [ $SG_IP_COUNT -gt 0 ]; then
+            echo "- **示例IP:**" >> $GITHUB_STEP_SUMMARY
+            head -5 sgip.txt | while read ip; do
+              echo "  - \`$ip\`" >> $GITHUB_STEP_SUMMARY
+            done
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "### SG区域443端口IP" >> $GITHUB_STEP_SUMMARY
           echo "- ❌ 文件不存在" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
         fi
