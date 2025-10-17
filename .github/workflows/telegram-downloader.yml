@@ -11,6 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    timeout-minutes: 30
     
     steps:
     - name: Checkout repository
@@ -78,11 +79,32 @@ jobs:
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
         
-        # 检查文件是否存在并添加
+        # 确保.gitignore存在并包含session文件
+        if [ ! -f ".gitignore" ]; then
+          echo "创建.gitignore文件"
+          cat > .gitignore << EOF
+# Telegram session files
+telegram_session.session
+*.session
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Environment variables
+.env
+EOF
+          git add .gitignore
+          git commit -m "添加.gitignore文件" || echo "没有更改需要提交"
+        fi
+        
+        # 重置session文件的更改（如果有）
+        git checkout -- telegram_session.session 2>/dev/null || echo "没有session文件需要重置"
+        
+        # 检查并添加IP文件
         files_to_add=""
         files_committed=""
         
-        # 检查并添加所有443端口IP文件
         if [ -f "ip.txt" ]; then
           echo "添加 ip.txt 文件"
           git add ip.txt
@@ -93,7 +115,6 @@ jobs:
           echo "警告: ip.txt 文件不存在"
         fi
         
-        # 检查并添加HK区域443端口IP文件
         if [ -f "hkip.txt" ]; then
           echo "添加 hkip.txt 文件"
           git add hkip.txt
@@ -104,7 +125,6 @@ jobs:
           echo "警告: hkip.txt 文件不存在"
         fi
         
-        # 检查并添加SG区域443端口IP文件
         if [ -f "sgip.txt" ]; then
           echo "添加 sgip.txt 文件"
           git add sgip.txt
