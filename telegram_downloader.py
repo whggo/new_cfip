@@ -5,6 +5,8 @@ from telethon import TelegramClient
 import logging
 import csv
 import sys
+from datetime import datetime, timedelta
+import pandas as pd
 
 # 配置信息 - 从环境变量获取
 API_ID = os.getenv('TELEGRAM_API_ID')
@@ -41,30 +43,41 @@ class TelegramDownloader:
             logger.error(f"启动失败: {e}")
             return False
         
-    async def download_latest_csv(self, download_folder):
-        """下载频道中最新的一.csv文件"""
+    async def download_todays_csv_files(self, download_folder):
+        """下载频道中今日发布的所有CSV文件"""
         # 确保下载文件夹存在
         os.makedirs(download_folder, exist_ok=True)
         
         # 获取频道实体
         try:
-            logger.info(f"正在连接频道: {self.channel_username}")
+            logger.info(f"正在连接频道: {self.channel_USERNAME}")
             channel = await self.client.get_entity(self.channel_username)
             logger.info(f"成功连接到频道: {channel.title}")
         except ValueError as e:
             logger.error(f"频道用户名格式错误: {e}")
             logger.info("尝试使用频道ID或链接...")
-            return None
+            return []
         except Exception as e:
             logger.error(f"连接频道失败: {e}")
             logger.info("请检查频道用户名是否正确，或者尝试使用频道ID或邀请链接")
-            return None
+            return []
         
-        # 查找最新的.csv文件
-        logger.info("正在查找最新的.csv文件...")
+        # 计算今天的时间范围
+        today = datetime.now().date()
+        today_start = datetime.combine(today, datetime.min.time())
+        today_end = datetime.combine(today, datetime.max.time())
+        
+        logger.info(f"正在查找今天 ({today}) 发布的CSV文件...")
+        
+        downloaded_files = []
         
         try:
-            async for message in self.client.iter_messages(channel, limit=50):
+            async for message in self.client.iter_messages(channel, limit=100):
+                # 检查消息是否在今天发布
+                message_date = message.date.replace(tzinfo=None)
+                if not (today_start <= message_date <= today_end):
+                    continue
+                
                 if message.media and hasattr(message.media, 'document'):
                     document = message.media.document
                     filename = None
@@ -77,7 +90,7 @@ class TelegramDownloader:
                     
                     # 检查是否为.csv文件
                     if filename and filename.lower().endswith('.csv'):
-                        logger.info(f"找到CSV文件: {filename}")
+                        logger.info(f"找到今天发布的CSV文件: {filename}")
                         
                         file_path = os.path.join(download_folder, filename)
                         
@@ -90,16 +103,132 @@ class TelegramDownloader:
                         try:
                             await self.client.download_media(message, file=file_path)
                             logger.info(f"下载成功: {filename}")
-                            return file_path
+                            downloaded_files.append(file_path)
                         except Exception as e:
                             logger.error(f"下载失败: {e}")
-                            return None
             
-            logger.info("未找到任何.csv文件")
-            return None
+            if downloaded_files:
+                logger.info(f"成功下载 {len(downloaded_files)} 个今天发布的CSV文件")
+            else:
+                logger.info("未找到今天发布的任何CSV文件")
+                
+            return downloaded_files
             
         except Exception as e:
             logger.error(f"获取消息时出错: {e}")
+            return []
+    
+    def merge_csv_files(self, csv_files, output_filename='merged.csv'):
+        """合并多个CSV文件"""
+        if not csv_files:
+            logger.info("没有CSV文件可合并")
+            return None
+        
+        if len(csv_files) == 1:
+            logger.info("只有一个CSV文件，无需合并")
+            return csv_files[0]
+        
+        logger.info(f"开始合并 {len(csv_files)} 个CSV文件...")
+        
+        merged_data = []
+        headers_set = set()
+        
+        # 首先读取所有文件，收集表头信息
+        for file_path in csv_files:
+            try:
+                with open(file_path, 'r', encoding='utf-8', errors='ignore') as file:
+                    sample = file.read(1024)
+                    file.seek(0)
+                    
+                    delimiter = ','
+                    if ';' in sample and ',' not in sample:
+                        delimiter = ';'
+                    elif '\t' in sample:
+                        delimiter = '\t'
+                    
+                    reader = csv.reader(file, delimiter=delimiter)
+                    headers = next(reader, None)
+                    if headers:
+                        headers_set.add(tuple(headers))
+                        
+            except Exception as e:
+                logger.error(f"读取文件 {file_path} 时出错: {e}")
+                continue
+        
+        # 如果所有文件表头一致，使用pandas合并
+        if len(headers_set) == 1:
+            try:
+                dfs = []
+                for file_path in csv_files:
+                    try:
+                        with open(file_path, 'r', encoding='utf-8', errors='ignore') as file:
+                            sample = file.read(1024)
+                            file.seek(0)
+                            
+                            delimiter = ','
+                            if ';' in sample and ',' not in sample:
+                                delimiter = ';'
+                            elif '\t' in sample:
+                                delimiter = '\t'
+                            
+                            df = pd.read_csv(file, delimiter=delimiter, encoding='utf-8', on_bad_lines='skip')
+                            dfs.append(df)
+                    except Exception as e:
+                        logger.error(f"使用pandas读取文件 {file_path} 时出错: {e}")
+                        continue
+                
+                if dfs:
+                    merged_df = pd.concat(dfs, ignore_index=True)
+                    merged_file_path = os.path.join(os.path.dirname(csv_files[0]), output_filename)
+                    merged_df.to_csv(merged_file_path, index=False, encoding='utf-8')
+                    logger.info(f"成功合并CSV文件: {merged_file_path}")
+                    return merged_file_path
+            except Exception as e:
+                logger.error(f"使用pandas合并CSV文件时出错: {e}")
+                logger.info("回退到手动合并方式...")
+        
+        # 手动合并方式
+        try:
+            merged_file_path = os.path.join(os.path.dirname(csv_files[0]), output_filename)
+            with open(merged_file_path, 'w', encoding='utf-8', newline='') as outfile:
+                writer = None
+                
+                for i, file_path in enumerate(csv_files):
+                    try:
+                        with open(file_path, 'r', encoding='utf-8', errors='ignore') as infile:
+                            sample = infile.read(1024)
+                            infile.seek(0)
+                            
+                            delimiter = ','
+                            if ';' in sample and ',' not in sample:
+                                delimiter = ';'
+                            elif '\t' in sample:
+                                delimiter = '\t'
+                            
+                            reader = csv.reader(infile, delimiter=delimiter)
+                            
+                            for row_num, row in enumerate(reader):
+                                if not row:
+                                    continue
+                                
+                                if i == 0 and row_num == 0:
+                                    # 第一个文件的第一行作为表头
+                                    writer = csv.writer(outfile, delimiter=delimiter)
+                                    writer.writerow(row)
+                                elif not (i == 0 and row_num == 0):
+                                    # 跳过后续文件的表头
+                                    if row_num > 0 or i > 0:
+                                        writer.writerow(row)
+                                        
+                    except Exception as e:
+                        logger.error(f"处理文件 {file_path} 时出错: {e}")
+                        continue
+            
+            logger.info(f"成功手动合并CSV文件: {merged_file_path}")
+            return merged_file_path
+            
+        except Exception as e:
+            logger.error(f"手动合并CSV文件时出错: {e}")
             return None
     
     def extract_443_ips_from_csv(self, csv_file_path):
@@ -263,40 +392,50 @@ async def main():
             print("## 错误: 无法启动Telegram客户端，请在本地重新运行setup_telegram.py")
             return
         
-        # 下载最新的CSV文件
-        file_path = await downloader.download_latest_csv(DOWNLOAD_FOLDER)
+        # 下载今天发布的所有CSV文件
+        csv_files = await downloader.download_todays_csv_files(DOWNLOAD_FOLDER)
         
-        if file_path:
-            logger.info(f"成功下载最新CSV文件: {file_path}")
+        if csv_files:
+            logger.info(f"成功下载 {len(csv_files)} 个今天发布的CSV文件")
             
-            # 提取443端口的IP地址
-            logger.info("正在从CSV文件中提取443端口的IP地址...")
-            ip_list = downloader.extract_443_ips_from_csv(file_path)
+            # 合并CSV文件
+            merged_file = downloader.merge_csv_files(csv_files)
             
-            if not ip_list:
-                logger.info("标准CSV解析未找到IP，尝试高级解析...")
-                ip_list = downloader.extract_443_ips_advanced(file_path)
-            
-            if ip_list:
-                downloader.save_ips_to_file(ip_list, IP_FILE)
-                logger.info(f"成功提取 {len(ip_list)} 个443端口IP地址")
-                print(f"## 提取结果")
-                print(f"- 目标频道: {CHANNEL_USERNAME}")
-                print(f"- 成功提取 {len(ip_list)} 个443端口IP地址")
-                print(f"- 文件已保存至: {IP_FILE}")
+            if merged_file:
+                logger.info(f"使用合并后的文件进行IP提取: {merged_file}")
                 
-                # 显示前几个IP作为示例
-                if len(ip_list) > 5:
-                    print(f"- 示例IP: {', '.join(ip_list[:5])}...")
+                # 提取443端口的IP地址
+                logger.info("正在从CSV文件中提取443端口的IP地址...")
+                ip_list = downloader.extract_443_ips_from_csv(merged_file)
+                
+                if not ip_list:
+                    logger.info("标准CSV解析未找到IP，尝试高级解析...")
+                    ip_list = downloader.extract_443_ips_advanced(merged_file)
+                
+                if ip_list:
+                    downloader.save_ips_to_file(ip_list, IP_FILE)
+                    logger.info(f"成功提取 {len(ip_list)} 个443端口IP地址")
+                    print(f"## 提取结果")
+                    print(f"- 目标频道: {CHANNEL_USERNAME}")
+                    print(f"- 下载文件数: {len(csv_files)}")
+                    print(f"- 成功提取 {len(ip_list)} 个443端口IP地址")
+                    print(f"- 文件已保存至: {IP_FILE}")
+                    
+                    # 显示前几个IP作为示例
+                    if len(ip_list) > 5:
+                        print(f"- 示例IP: {', '.join(ip_list[:5])}...")
+                    else:
+                        print(f"- IP列表: {', '.join(ip_list)}")
                 else:
-                    print(f"- IP列表: {', '.join(ip_list)}")
+                    logger.info("未找到任何443端口的IP地址")
+                    print("## 提取结果: 未找到任何443端口的IP地址")
             else:
-                logger.info("未找到任何443端口的IP地址")
-                print("## 提取结果: 未找到任何443端口的IP地址")
+                logger.error("CSV文件合并失败")
+                print("## 错误: CSV文件合并失败")
         
         else:
-            logger.info("未找到CSV文件")
-            print("## 提取结果: 未找到CSV文件")
+            logger.info("未找到今天发布的CSV文件")
+            print("## 提取结果: 未找到今天发布的CSV文件")
         
     except Exception as e:
         logger.error(f"发生错误: {e}")
