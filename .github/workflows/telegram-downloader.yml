@@ -26,7 +26,7 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install telethon
+        pip install telethon pandas
         
     - name: Debug environment variables
       run: |
@@ -48,30 +48,65 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: ip-files
-        path: ip.txt
+        path: |
+          ip.txt
+          telegram_downloads/
         retention-days: 7
         
-    - name: Commit and push only IP file
+    - name: Check downloaded files
       if: success()
       run: |
-        # 检查ip.txt是否有变化
-        if [ ! -f "ip.txt" ]; then
-          echo "ip.txt 文件不存在，跳过提交"
-          exit 0
-        fi
+        echo "=== 检查下载的文件 ==="
+        ls -la telegram_downloads/ || echo "telegram_downloads目录不存在"
+        echo "=== IP文件内容 ==="
+        cat ip.txt || echo "ip.txt文件不存在"
         
-        if git diff --quiet ip.txt 2>/dev/null; then
-          echo "ip.txt 没有变化，跳过提交"
-          exit 0
-        fi
-        
+    - name: Always commit and push files
+      if: success()
+      run: |
         # 设置Git用户信息
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
         
-        # 只添加ip.txt文件
-        git add ip.txt
-        git commit -m "🤖 Auto-update IP list - $(date +'%Y-%m-%d %H:%M')"
+        # 检查文件是否存在并添加
+        files_to_add=""
         
-        # 推送到仓库
-        git push
+        if [ -f "ip.txt" ]; then
+          echo "添加 ip.txt 文件"
+          git add ip.txt
+          files_to_add="$files_to_add ip.txt"
+        else
+          echo "警告: ip.txt 文件不存在"
+        fi
+        
+        # 检查并添加CSV文件
+        if [ -d "telegram_downloads" ]; then
+          echo "检查telegram_downloads目录中的文件..."
+          csv_files=$(find telegram_downloads -name "*.csv" -type f)
+          if [ -n "$csv_files" ]; then
+            echo "找到CSV文件:"
+            echo "$csv_files"
+            git add telegram_downloads/
+            files_to_add="$files_to_add CSV文件"
+          else
+            echo "telegram_downloads目录中没有CSV文件"
+          fi
+        else
+          echo "telegram_downloads目录不存在"
+        fi
+        
+        # 如果有文件要提交
+        if [ -n "$files_to_add" ]; then
+          echo "提交文件: $files_to_add"
+          git commit -m "🤖 Auto-update - $(date +'%Y-%m-%d %H:%M:%S') [文件: $files_to_add]"
+          
+          echo "推送到仓库..."
+          git push
+          echo "✅ 文件提交成功"
+        else
+          echo "❌ 没有找到要提交的文件"
+          # 即使没有文件，也创建一个空的提交来记录运行状态
+          git commit --allow-empty -m "🤖 Auto-update - $(date +'%Y-%m-%d %H:%M:%S') - 没有新文件"
+          git push
+          echo "✅ 创建空提交记录"
+        fi
