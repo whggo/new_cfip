@@ -1,0 +1,264 @@
+name: Telegram IP Extractor
+
+on:
+  schedule:
+    # 每天北京时间11点运行 (UTC+8 = UTC 3点)
+    - cron: '0 3 * * *'
+  workflow_dispatch:  # 允许手动触发
+
+jobs:
+  extract-ips:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    timeout-minutes: 30
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install telethon pandas
+        
+    - name: Debug environment variables
+      run: |
+        echo "TELEGRAM_CHANNEL: ${{ secrets.TELEGRAM_CHANNEL }}"
+        
+    - name: Run Telegram IP Extractor
+      env:
+        TELEGRAM_API_ID: ${{ secrets.TELEGRAM_API_ID }}
+        TELEGRAM_API_HASH: ${{ secrets.TELEGRAM_API_HASH }}
+        TELEGRAM_PHONE: ${{ secrets.TELEGRAM_PHONE }}
+        TELEGRAM_CHANNEL: ${{ secrets.TELEGRAM_CHANNEL }}
+      run: |
+        echo "开始运行Telegram IP提取器..."
+        echo "目标频道: $TELEGRAM_CHANNEL"
+        python telegram_downloader.py
+        
+    - name: Upload IP file as artifact
+      if: success()
+      uses: actions/upload-artifact@v4
+      with:
+        name: ip-files
+        path: |
+          ip.txt
+          hkip.txt
+          sgip.txt
+          telegram_downloads/
+        retention-days: 7
+        
+    - name: Check downloaded files
+      if: success()
+      run: |
+        echo "=== 检查下载的文件 ==="
+        ls -la telegram_downloads/ || echo "telegram_downloads目录不存在"
+        echo "=== 所有443端口IP文件内容 ==="
+        cat ip.txt || echo "ip.txt文件不存在"
+        echo "=== HK区域443端口IP文件内容 ==="
+        cat hkip.txt || echo "hkip.txt文件不存在"
+        echo "=== SG区域443端口IP文件内容 ==="
+        cat sgip.txt || echo "sgip.txt文件不存在"
+        echo "=== 文件统计 ==="
+        echo "所有443端口IP数量: $(wc -l < ip.txt 2>/dev/null || echo 0)"
+        echo "HK区域443端口IP数量: $(wc -l < hkip.txt 2>/dev/null || echo 0)"
+        echo "SG区域443端口IP数量: $(wc -l < sgip.txt 2>/dev/null || echo 0)"
+        
+    - name: Always commit and push files
+      if: success()
+      run: |
+        # 设置Git用户信息
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        
+        # 确保.gitignore存在并包含session文件
+        if [ ! -f ".gitignore" ]; then
+          echo "创建.gitignore文件"
+          cat > .gitignore << EOF
+# Telegram session files
+telegram_session.session
+*.session
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Environment variables
+.env
+EOF
+          git add .gitignore
+          git commit -m "添加.gitignore文件" || echo "没有更改需要提交"
+        fi
+        
+        # 重置session文件的更改（如果有）
+        git checkout -- telegram_session.session 2>/dev/null || echo "没有session文件需要重置"
+        
+        # 检查并添加IP文件
+        files_to_add=""
+        files_committed=""
+        
+        if [ -f "ip.txt" ]; then
+          echo "添加 ip.txt 文件"
+          git add ip.txt
+          files_to_add="$files_to_add ip.txt"
+          ip_count=$(wc -l < ip.txt)
+          files_committed="$files_committed 所有443端口IP($ip_count个)"
+        else
+          echo "警告: ip.txt 文件不存在"
+        fi
+        
+        if [ -f "hkip.txt" ]; then
+          echo "添加 hkip.txt 文件"
+          git add hkip.txt
+          files_to_add="$files_to_add hkip.txt"
+          hk_ip_count=$(wc -l < hkip.txt)
+          files_committed="$files_committed HK区域443端口IP($hk_ip_count个)"
+        else
+          echo "警告: hkip.txt 文件不存在"
+        fi
+        
+        if [ -f "sgip.txt" ]; then
+          echo "添加 sgip.txt 文件"
+          git add sgip.txt
+          files_to_add="$files_to_add sgip.txt"
+          sg_ip_count=$(wc -l < sgip.txt)
+          files_committed="$files_committed SG区域443端口IP($sg_ip_count个)"
+        else
+          echo "警告: sgip.txt 文件不存在"
+        fi
+        
+        # 检查并添加CSV文件
+        if [ -d "telegram_downloads" ]; then
+          echo "检查telegram_downloads目录中的文件..."
+          csv_files=$(find telegram_downloads -name "*.csv" -type f)
+          if [ -n "$csv_files" ]; then
+            echo "找到CSV文件:"
+            echo "$csv_files"
+            git add telegram_downloads/
+            files_to_add="$files_to_add CSV文件"
+            csv_count=$(echo "$csv_files" | wc -l)
+            files_committed="$files_committed CSV文件($csv_count个)"
+          else
+            echo "telegram_downloads目录中没有CSV文件"
+          fi
+        else
+          echo "telegram_downloads目录不存在"
+        fi
+        
+        # 如果有文件要提交
+        if [ -n "$files_to_add" ]; then
+          echo "提交文件: $files_to_add"
+          echo "文件详情: $files_committed"
+          git commit -m "🤖 Auto-update - $(date +'%Y-%m-%d %H:%M:%S') [ $files_committed ]"
+          
+          echo "推送到仓库..."
+          git push
+          echo "✅ 文件提交成功"
+          
+          # 显示提交的文件统计
+          echo "=== 提交的文件统计 ==="
+          if [ -f "ip.txt" ]; then
+            echo "所有443端口IP数量: $(wc -l < ip.txt)"
+          fi
+          if [ -f "hkip.txt" ]; then
+            echo "HK区域443端口IP数量: $(wc -l < hkip.txt)"
+          fi
+          if [ -f "sgip.txt" ]; then
+            echo "SG区域443端口IP数量: $(wc -l < sgip.txt)"
+          fi
+        else
+          echo "❌ 没有找到要提交的文件"
+          # 即使没有文件，也创建一个空的提交来记录运行状态
+          git commit --allow-empty -m "🤖 Auto-update - $(date +'%Y-%m-%d %H:%M:%S') - 没有新文件"
+          git push
+          echo "✅ 创建空提交记录"
+        fi
+        
+    - name: Create summary report
+      if: always()
+      run: |
+        echo "## 📊 Telegram IP提取器运行结果" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**运行时间:** $(date +'%Y-%m-%d %H:%M:%S')" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        if [ -f "ip.txt" ]; then
+          IP_COUNT=$(wc -l < ip.txt)
+          echo "### 所有443端口IP" >> $GITHUB_STEP_SUMMARY
+          echo "- **文件:** ip.txt" >> $GITHUB_STEP_SUMMARY
+          echo "- **数量:** $IP_COUNT 个IP" >> $GITHUB_STEP_SUMMARY
+          if [ $IP_COUNT -gt 0 ]; then
+            echo "- **示例IP:**" >> $GITHUB_STEP_SUMMARY
+            head -5 ip.txt | while read ip; do
+              echo "  - \`$ip\`" >> $GITHUB_STEP_SUMMARY
+            done
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "### 所有443端口IP" >> $GITHUB_STEP_SUMMARY
+          echo "- ❌ 文件不存在" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        if [ -f "hkip.txt" ]; then
+          HK_IP_COUNT=$(wc -l < hkip.txt)
+          echo "### HK区域443端口IP" >> $GITHUB_STEP_SUMMARY
+          echo "- **文件:** hkip.txt" >> $GITHUB_STEP_SUMMARY
+          echo "- **数量:** $HK_IP_COUNT 个IP" >> $GITHUB_STEP_SUMMARY
+          if [ $HK_IP_COUNT -gt 0 ]; then
+            echo "- **示例IP:**" >> $GITHUB_STEP_SUMMARY
+            head -5 hkip.txt | while read ip; do
+              echo "  - \`$ip\`" >> $GITHUB_STEP_SUMMARY
+            done
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "### HK区域443端口IP" >> $GITHUB_STEP_SUMMARY
+          echo "- ❌ 文件不存在" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        if [ -f "sgip.txt" ]; then
+          SG_IP_COUNT=$(wc -l < sgip.txt)
+          echo "### SG区域443端口IP" >> $GITHUB_STEP_SUMMARY
+          echo "- **文件:** sgip.txt" >> $GITHUB_STEP_SUMMARY
+          echo "- **数量:** $SG_IP_COUNT 个IP" >> $GITHUB_STEP_SUMMARY
+          if [ $SG_IP_COUNT -gt 0 ]; then
+            echo "- **示例IP:**" >> $GITHUB_STEP_SUMMARY
+            head -5 sgip.txt | while read ip; do
+              echo "  - \`$ip\`" >> $GITHUB_STEP_SUMMARY
+            done
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "### SG区域443端口IP" >> $GITHUB_STEP_SUMMARY
+          echo "- ❌ 文件不存在" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        if [ -d "telegram_downloads" ]; then
+          CSV_COUNT=$(find telegram_downloads -name "*.csv" -type f | wc -l)
+          echo "### 下载的CSV文件" >> $GITHUB_STEP_SUMMARY
+          echo "- **目录:** telegram_downloads/" >> $GITHUB_STEP_SUMMARY
+          echo "- **数量:** $CSV_COUNT 个文件" >> $GITHUB_STEP_SUMMARY
+          if [ $CSV_COUNT -gt 0 ]; then
+            echo "- **文件列表:**" >> $GITHUB_STEP_SUMMARY
+            find telegram_downloads -name "*.csv" -type f -exec basename {} \; | head -5 | while read file; do
+              echo "  - \`$file\`" >> $GITHUB_STEP_SUMMARY
+            done
+            if [ $CSV_COUNT -gt 5 ]; then
+              echo "  - ... 还有 $(($CSV_COUNT - 5)) 个文件" >> $GITHUB_STEP_SUMMARY
+            fi
+          fi
+        else
+          echo "### 下载的CSV文件" >> $GITHUB_STEP_SUMMARY
+          echo "- ❌ 目录不存在" >> $GITHUB_STEP_SUMMARY
+        fi
